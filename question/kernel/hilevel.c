@@ -11,6 +11,9 @@
 pcb_t pcb[ 3 ]; int executing = 0; int processes = 3; int time = 0;
 
 void scheduler( ctx_t* ctx ) {
+//////////////////////////////////////////////////////////////////////////////////////////
+///                                STAGE 1 a AND b                                     ///
+//////////////////////////////////////////////////////////////////////////////////////////
 
   for (int i = 0; i < processes; i++){
       int nextProcess = (i+1)%processes;
@@ -28,13 +31,15 @@ void scheduler( ctx_t* ctx ) {
             memcpy( ctx, &pcb[ i ].ctx, sizeof( ctx_t ) ); // restore  P_i+1
             pcb[ i ].status = STATUS_EXECUTING;  // update   P_i+1 status
             executing = i;                       // update   index => P_i+1
-            if (time % 10 == 0){
+            //if (time % 10 == 0){
                pcb[ i+1 ].pr = pcb[ i ].pr + 1;
-            }
+            //}
             break;
         }
       }
   }
+
+//////////////////////////////////////////////////////////////////////////////////////////
 
   return;
 }
@@ -80,18 +85,18 @@ void hilevel_handler_rst(ctx_t* ctx) {
 
   for (int i = 0; i < processes; i ++){
       memset( &pcb[ i ], 0, sizeof( pcb_t ) );
-      pcb[ i ].pid      = 1;
+      pcb[ i ].pid      = i+1;
       pcb[ i ].status   = STATUS_READY;
       pcb[ i ].ctx.cpsr = 0x50;
   }
 
     pcb[ 0 ].ctx.pc   = ( uint32_t )( &main_P3 );
     pcb[ 0 ].ctx.sp   = ( uint32_t )( &tos_P3  );
-    pcb[ 0 ].pr       = 3;  //priority of process 1
+    pcb[ 0 ].pr       = 7;  //priority of process 1
 
     pcb[ 1 ].ctx.pc   = ( uint32_t )( &main_P4 );
     pcb[ 1 ].ctx.sp   = ( uint32_t )( &tos_P4  );
-    pcb[ 1 ].pr       = 8;  //priority of process 2
+    pcb[ 1 ].pr       = 3;  //priority of process 2
 
     pcb[ 2 ].ctx.pc   = ( uint32_t )( &main_P5 );
     pcb[ 2 ].ctx.sp   = ( uint32_t )( &tos_P5  );
@@ -150,10 +155,40 @@ void hilevel_handler_svc( ctx_t* ctx, uint32_t id ) {
       break;
 	}
 
+  case 0x03 : {
+    extern void     main_P6();
+    extern uint32_t tos_P6;
+
+    processes = processes + 1;
+    pcb[ processes-1 ].pid = processes;
+    pcb[ processes-1 ].status = STATUS_READY;
+    pcb[ processes-1 ].ctx.cpsr = 0x50;
+    pcb[ processes-1 ].ctx.pc   = ( uint32_t )( &main_P6 );
+    pcb[ processes-1 ].ctx.sp   = ( uint32_t )( &tos_P6  );
+    pcb[ processes-1 ].pr       = 2;  //priority of process 1
+    break;
+  }
+
+  case 0x04 : {
+    int   fd = ( int   )( ctx->gpr[ 0 ] );
+    char*  x = ( char* )( ctx->gpr[ 1 ] );
+    int    n = ( int   )( ctx->gpr[ 2 ] );
+
+    for( int i = 0; i < n; i++ ) {
+        x[i] = PL011_getc( UART0, true );
+    }
+
+    if (x == "exit"){
+      exit(EXIT_SUCCESS);
+    }
+
+  }
+
     default   : { // 0x?? => unknown/unsupported
       break;
     }
   }
+
 
   return;
 }
@@ -175,4 +210,8 @@ void hilevel_handler_irq (ctx_t* ctx){
   GICC0->EOIR = id;
 
   return;
+}
+
+void terminate(){
+  exit(EXIT_SUCCESS);
 }
