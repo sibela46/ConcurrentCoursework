@@ -169,19 +169,8 @@ void hilevel_handler_svc( ctx_t* ctx, uint32_t id ) {
     break;
   }
 
-  case 0x04 : {
-    int   fd = ( int   )( ctx->gpr[ 0 ] );
-    char*  x = ( char* )( ctx->gpr[ 1 ] );
-    int    n = ( int   )( ctx->gpr[ 2 ] );
-
-    for( int i = 0; i < n; i++ ) {
-        x[i] = PL011_getc( UART0, true );
-    }
-
-    if (x == "exit"){
-      exit(EXIT_SUCCESS);
-    }
-
+  case 0x06 : {
+    exit(1);
   }
 
     default   : { // 0x?? => unknown/unsupported
