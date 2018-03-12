@@ -8,19 +8,22 @@
 #include "hilevel.h"
 #include "libc.h"
 
-pcb_t pcb[ 3 ]; int executing = 0; int processes = 3; int time = 0;
+pcb_t pcb[ 4 ]; int executing = 0; int processes = 3; int time = 0; int started = 0;
 
-void scheduler( ctx_t* ctx ) {
-//////////////////////////////////////////////////////////////////////////////////////////
-///                                STAGE 1 a AND b                                     ///
-//////////////////////////////////////////////////////////////////////////////////////////
-
-  for (int i = 0; i < processes; i++){
-      int nextProcess = (i+1)%processes;
-      if (i == executing) {
+void switchProcesses(ctx_t* ctx) {
+  for (int i = 1; i < processes+1; i++){
+      int nextProcess = (i+1)%(processes+1);
+      if (executing == 0){
+        memcpy( &pcb[ 0 ].ctx, ctx, sizeof( ctx_t ) ); // preserve console
+        pcb[ 0 ].status = STATUS_READY;                // update   console status
+        memcpy( ctx, &pcb[ 1 ].ctx, sizeof( ctx_t ) ); // restore  P_1
+        pcb[ 1 ].status = STATUS_EXECUTING;  // update   P_1 status
+        executing = 1;                       // update   index => P_1
+      }
+      else if (i == executing) {
         memcpy( &pcb[ i ].ctx, ctx, sizeof( ctx_t ) ); // preserve P_i
         pcb[ i ].status = STATUS_READY;                // update   P_i status
-        if (pcb[ i+1 ].pr > pcb[ i ].pr){
+        if (pcb[ nextProcess ].pr > pcb[ i ].pr){
             memcpy( ctx, &pcb[ nextProcess ].ctx, sizeof( ctx_t ) ); // restore  P_i+1
             pcb[ nextProcess ].status = STATUS_EXECUTING;  // update   P_i+1 status
             executing = nextProcess;                       // update   index => P_i+1
@@ -32,15 +35,25 @@ void scheduler( ctx_t* ctx ) {
             pcb[ i ].status = STATUS_EXECUTING;  // update   P_i+1 status
             executing = i;                       // update   index => P_i+1
             //if (time % 10 == 0){
-               pcb[ i+1 ].pr = pcb[ i ].pr + 1;
+               pcb[ nextProcess ].pr = pcb[ i ].pr + 1;
             //}
             break;
         }
       }
   }
+}
 
+void scheduler( ctx_t* ctx ) {
 //////////////////////////////////////////////////////////////////////////////////////////
-
+///                                STAGE 1 a AND b                                     ///
+//////////////////////////////////////////////////////////////////////////////////////////
+  if (started == 0) {
+    //do nothing
+  }
+  else {
+    switchProcesses(ctx);
+  }
+//////////////////////////////////////////////////////////////////////////////////////////
   return;
 }
 
@@ -50,6 +63,31 @@ extern void     main_P4();
 extern uint32_t tos_P4;
 extern void     main_P5();
 extern uint32_t tos_P5;
+extern void     main_console();
+extern uint32_t tos_console;
+
+void initialise_pcb (ctx_t* ctx) {
+
+   for (int i = 1; i < processes+1; i ++){
+       memset( &pcb[ i ], 0, sizeof( pcb_t ) );
+       pcb[ i ].pid      = i;
+       pcb[ i ].status   = STATUS_READY;
+       pcb[ i ].ctx.cpsr = 0x50;
+   }
+
+    pcb[ 1 ].ctx.pc   = ( uint32_t )( &main_P3 );
+    pcb[ 1 ].ctx.sp   = ( uint32_t )( &tos_P3  );
+    pcb[ 1 ].pr       = 3;  //priority of process 3
+
+    pcb[ 2 ].ctx.pc   = ( uint32_t )( &main_P4 );
+    pcb[ 2 ].ctx.sp   = ( uint32_t )( &tos_P4  );
+    pcb[ 2 ].pr       = 5;  //priority of process 4
+
+    pcb[ 3 ].ctx.pc   = ( uint32_t )( &main_P5 );
+    pcb[ 3 ].ctx.sp   = ( uint32_t )( &tos_P5  );
+    pcb[ 3 ].pr       = 7;  //priority of process 4
+
+}
 
 void hilevel_handler_rst(ctx_t* ctx) {
 
@@ -83,24 +121,14 @@ void hilevel_handler_rst(ctx_t* ctx) {
    * - the PC and SP values matche the entry point and top of stack.
    */
 
-  for (int i = 0; i < processes; i ++){
-      memset( &pcb[ i ], 0, sizeof( pcb_t ) );
-      pcb[ i ].pid      = i+1;
-      pcb[ i ].status   = STATUS_READY;
-      pcb[ i ].ctx.cpsr = 0x50;
-  }
+    pcb[ 0 ].pid      = 0;
+    pcb[ 0 ].status   = STATUS_READY;
+    pcb[ 0 ].ctx.cpsr = 0x50;
+    pcb[ 0 ].ctx.pc   = ( uint32_t )( &main_console );
+    pcb[ 0 ].ctx.sp   = ( uint32_t )( &tos_console  );
+    pcb[ 0 ].pr       = 0;  //priority of process 1
 
-    pcb[ 0 ].ctx.pc   = ( uint32_t )( &main_P3 );
-    pcb[ 0 ].ctx.sp   = ( uint32_t )( &tos_P3  );
-    pcb[ 0 ].pr       = 7;  //priority of process 1
-
-    pcb[ 1 ].ctx.pc   = ( uint32_t )( &main_P4 );
-    pcb[ 1 ].ctx.sp   = ( uint32_t )( &tos_P4  );
-    pcb[ 1 ].pr       = 3;  //priority of process 2
-
-    pcb[ 2 ].ctx.pc   = ( uint32_t )( &main_P5 );
-    pcb[ 2 ].ctx.sp   = ( uint32_t )( &tos_P5  );
-    pcb[ 2 ].pr       = 5;  //priority of process 3
+    initialise_pcb(ctx);
 
     /* Once the PCBs are initialised, we (arbitrarily) select one to be
      * restored (i.e., executed) when the function then returns.
@@ -108,7 +136,6 @@ void hilevel_handler_rst(ctx_t* ctx) {
 
     memcpy( ctx, &pcb[ 0 ].ctx, sizeof( ctx_t ) );
     pcb[ 0 ].status = STATUS_EXECUTING;
-    executing = 0;
 
   return;
 }
@@ -137,7 +164,7 @@ void hilevel_handler_svc( ctx_t* ctx, uint32_t id ) {
         PL011_putc( UART0, *x++, true );
       }
 
-	  GICC0->EOIR = id;
+	    GICC0->EOIR = id;
       ctx->gpr[ 0 ] = n;
       break;
     }
@@ -155,24 +182,16 @@ void hilevel_handler_svc( ctx_t* ctx, uint32_t id ) {
       break;
 	}
 
-  case 0x03 : {
-    extern void     main_P6();
-    extern uint32_t tos_P6;
-
-    processes = processes + 1;
-    pcb[ processes-1 ].pid = processes;
-    pcb[ processes-1 ].status = STATUS_READY;
-    pcb[ processes-1 ].ctx.cpsr = 0x50;
-    pcb[ processes-1 ].ctx.pc   = ( uint32_t )( &main_P6 );
-    pcb[ processes-1 ].ctx.sp   = ( uint32_t )( &tos_P6  );
-    pcb[ processes-1 ].pr       = 2;  //priority of process 1
+  case 0x05 : {
+    started = 1;
+    executing = 0;
     break;
   }
 
   case 0x06 : {
-    exit(1);
+    kill (executing, EXIT_SUCCESS);
   }
-
+  
     default   : { // 0x?? => unknown/unsupported
       break;
     }
