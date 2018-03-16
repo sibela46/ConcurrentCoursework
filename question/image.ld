@@ -34,4 +34,8 @@ SECTIONS {
   /* allocate stack for P5           */
   .       = . + 0x00001000;
   tos_P5  = .;
+  /* allocate stack for additional
+  processes                          */
+  .       = . + 0x00010000;
+  tos_addedP  = .;
 }

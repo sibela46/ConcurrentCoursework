@@ -8,9 +8,11 @@
 #include "hilevel.h"
 #include "libc.h"
 
-pcb_t pcb[ 4 ]; int executing = 0; int processes = 3; int time = 0; int started = 0;
+#define pcbSize 1000
 
-void switchProcesses(ctx_t* ctx) {
+int processes = 1; pcb_t pcb[ pcbSize ]; int executing = 0; int time = 0; int started = 0;
+
+void loopProcesses(ctx_t* ctx) {
   for (int i = 1; i < processes+1; i++){
       int nextProcess = (i+1)%(processes+1);
       if (executing == 0){
@@ -47,12 +49,32 @@ void scheduler( ctx_t* ctx ) {
 //////////////////////////////////////////////////////////////////////////////////////////
 ///                                STAGE 1 a AND b                                     ///
 //////////////////////////////////////////////////////////////////////////////////////////
-  if (started == 0) {
-    //do nothing
+  int nextProcess;
+
+  if (executing == 0) {
+    nextProcess = processes-1;
+  }
+  else{
+      nextProcess = (executing+1)%(processes+1);
+  }
+
+  memcpy( &pcb[ executing ].ctx, ctx, sizeof( ctx_t ) ); // preserve console
+  pcb[ executing ].status = STATUS_READY;                // update   console status
+
+  if (pcb[ nextProcess ].pr > pcb[ executing ].pr){
+    memcpy( ctx, &pcb[ nextProcess ].ctx, sizeof( ctx_t ) ); // restore  P_1
+    pcb[ nextProcess ].status = STATUS_EXECUTING;  // update   P_1 status
+    executing = nextProcess;                       // update   index => P_1
   }
   else {
-    switchProcesses(ctx);
+      time++;
+      memcpy( ctx, &pcb[ executing ].ctx, sizeof( ctx_t ) ); // restore  P_i+1
+      pcb[ executing ].status = STATUS_EXECUTING;  // update   P_i+1 status
+      //if (time % 10 == 0){
+         pcb[ nextProcess ].pr = pcb[ executing ].pr + 1;
+      //}
   }
+
 //////////////////////////////////////////////////////////////////////////////////////////
   return;
 }
@@ -65,6 +87,7 @@ extern void     main_P5();
 extern uint32_t tos_P5;
 extern void     main_console();
 extern uint32_t tos_console;
+extern uint32_t tos_addedP;
 
 void initialise_pcb (ctx_t* ctx) {
 
@@ -87,6 +110,26 @@ void initialise_pcb (ctx_t* ctx) {
     pcb[ 3 ].ctx.sp   = ( uint32_t )( &tos_P5  );
     pcb[ 3 ].pr       = 7;  //priority of process 4
 
+}
+
+void add_process (ctx_t* ctx) {
+    processes += 1;
+    //memcpy( &pcb[ executing ].ctx, &pcb[processes].ctx, sizeof( ctx_t ) ); // preserve P_i
+
+    memcpy( &pcb[ processes ], &pcb[executing], sizeof( pcb_t ) );
+    pcb[ processes ].pid      = processes+1;
+    pcb[ processes ].status   = STATUS_READY;
+    pcb[ processes ].ctx.cpsr = 0x50;
+    pcb[ processes ].ctx.pc   = pcb[ executing ].ctx.pc;
+    pcb[ processes ].ctx.sp   = ( uint32_t )( &tos_addedP  );
+    pcb[ processes ].pr       = pcb[ executing ].pr;  //priority of process 3
+
+}
+
+void clearAddressSpace (ctx_t* ctx) {
+    for (int i=0; i<13; i++) {
+      ctx->gpr[i] = 0;
+    }
 }
 
 void hilevel_handler_rst(ctx_t* ctx) {
@@ -170,7 +213,7 @@ void hilevel_handler_svc( ctx_t* ctx, uint32_t id ) {
     }
 
 	case 0x02 : { // 0x10 => read(fd, x, n)
-	  int   fd = ( int   )( ctx->gpr[ 0 ] );
+	    int   fd = ( int   )( ctx->gpr[ 0 ] );
       char*  x = ( char* )( ctx->gpr[ 1 ] );
       int    n = ( int   )( ctx->gpr[ 2 ] );
 
@@ -182,16 +225,22 @@ void hilevel_handler_svc( ctx_t* ctx, uint32_t id ) {
       break;
 	}
 
+  case 0x03 : {
+    add_process(ctx);
+    break;
+  }
+
   case 0x05 : {
-    started = 1;
-    executing = 0;
+    pcb[ executing ].ctx.cpsr = 0x50;
+    ctx->pc = (uint32_t) ctx->gpr[0];
     break;
   }
 
   case 0x06 : {
     kill (executing, EXIT_SUCCESS);
+    break;
   }
-  
+
     default   : { // 0x?? => unknown/unsupported
       break;
     }

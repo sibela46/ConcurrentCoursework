@@ -30,6 +30,7 @@ void main_P5() {
     for( uint32_t x = lo; x < hi; x++ ) {
       int r = is_prime( x );
     }
+
   }
 
   exit( EXIT_SUCCESS );
