@@ -10,10 +10,11 @@
 
 #define pcbSize 1000
 
-int processes = 1; pcb_t pcb[ pcbSize ]; int executing = 0; int time = 0; int started = 0;
+int processes = 0; pcb_t pcb[ pcbSize ]; int executing = 0; int time = 0;
 
-void loopProcesses(ctx_t* ctx) {
-  for (int i = 1; i < processes+1; i++){
+void scheduler( ctx_t* ctx ) {
+
+     for (int i = 1; i < processes+1; i++){
       int nextProcess = (i+1)%(processes+1);
       if (executing == 0){
         memcpy( &pcb[ 0 ].ctx, ctx, sizeof( ctx_t ) ); // preserve console
@@ -43,40 +44,6 @@ void loopProcesses(ctx_t* ctx) {
         }
       }
   }
-}
-
-void scheduler( ctx_t* ctx ) {
-//////////////////////////////////////////////////////////////////////////////////////////
-///                                STAGE 1 a AND b                                     ///
-//////////////////////////////////////////////////////////////////////////////////////////
-  int nextProcess;
-
-  if (executing == 0) {
-    nextProcess = processes-1;
-  }
-  else{
-      nextProcess = (executing+1)%(processes+1);
-  }
-
-  memcpy( &pcb[ executing ].ctx, ctx, sizeof( ctx_t ) ); // preserve console
-  pcb[ executing ].status = STATUS_READY;                // update   console status
-
-  if (pcb[ nextProcess ].pr > pcb[ executing ].pr){
-    memcpy( ctx, &pcb[ nextProcess ].ctx, sizeof( ctx_t ) ); // restore  P_1
-    pcb[ nextProcess ].status = STATUS_EXECUTING;  // update   P_1 status
-    executing = nextProcess;                       // update   index => P_1
-  }
-  else {
-      time++;
-      memcpy( ctx, &pcb[ executing ].ctx, sizeof( ctx_t ) ); // restore  P_i+1
-      pcb[ executing ].status = STATUS_EXECUTING;  // update   P_i+1 status
-      //if (time % 10 == 0){
-         pcb[ nextProcess ].pr = pcb[ executing ].pr + 1;
-      //}
-  }
-
-//////////////////////////////////////////////////////////////////////////////////////////
-  return;
 }
 
 extern void     main_P3();
@@ -114,15 +81,11 @@ void initialise_pcb (ctx_t* ctx) {
 
 void add_process (ctx_t* ctx) {
     processes += 1;
-    //memcpy( &pcb[ executing ].ctx, &pcb[processes].ctx, sizeof( ctx_t ) ); // preserve P_i
+    executing = processes;
 
-    memcpy( &pcb[ processes ], &pcb[executing], sizeof( pcb_t ) );
+    memcpy( &pcb[ processes ].ctx, &ctx, sizeof( pcb_t ) );
     pcb[ processes ].pid      = processes+1;
-    pcb[ processes ].status   = STATUS_READY;
-    pcb[ processes ].ctx.cpsr = 0x50;
-    pcb[ processes ].ctx.pc   = pcb[ executing ].ctx.pc;
     pcb[ processes ].ctx.sp   = ( uint32_t )( &tos_addedP  );
-    pcb[ processes ].pr       = pcb[ executing ].pr;  //priority of process 3
 
 }
 
@@ -169,7 +132,7 @@ void hilevel_handler_rst(ctx_t* ctx) {
     pcb[ 0 ].ctx.cpsr = 0x50;
     pcb[ 0 ].ctx.pc   = ( uint32_t )( &main_console );
     pcb[ 0 ].ctx.sp   = ( uint32_t )( &tos_console  );
-    pcb[ 0 ].pr       = 0;  //priority of process 1
+    pcb[ 0 ].pr       = 20;  //priority of process 1
 
     initialise_pcb(ctx);
 
@@ -233,6 +196,7 @@ void hilevel_handler_svc( ctx_t* ctx, uint32_t id ) {
   case 0x05 : {
     pcb[ executing ].ctx.cpsr = 0x50;
     ctx->pc = (uint32_t) ctx->gpr[0];
+    clearAddressSpace(ctx);
     break;
   }
 
