@@ -1,7 +1,7 @@
 /* Copyright (C) 2017 Daniel Page <csdsp@bristol.ac.uk>
  *
- * Use of this source code is restricted per the CC BY-NC-ND license, a copy of 
- * which can be found via http://creativecommons.org (and should be included as 
+ * Use of this source code is restricted per the CC BY-NC-ND license, a copy of
+ * which can be found via http://creativecommons.org (and should be included as
  * LICENSE.txt within the associated archive or repository).
  */
 
@@ -26,7 +26,7 @@
 #include "lolevel.h"
 #include     "int.h"
 
-/* The kernel source code is made simpler and more consistent by using 
+/* The kernel source code is made simpler and more consistent by using
  * some human-readable type definitions:
  *
  * - a type that captures a Process IDentifier (PID), which is really
@@ -41,7 +41,7 @@
 
 typedef int pid_t;
 
-typedef enum { 
+typedef enum {
   STATUS_CREATED,
   STATUS_READY,
   STATUS_EXECUTING,
@@ -57,6 +57,7 @@ typedef struct {
      pid_t    pid;
   status_t status;
      ctx_t    ctx;
+  uint32_t    tos;
 } pcb_t;
 
 #endif
