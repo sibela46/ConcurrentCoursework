@@ -9,7 +9,7 @@
 #include "hilevel.h"
 
 #define numberOfProcesses 1000
-#define processesForRobin 3
+#define processesForRobin 6
 #define sizeOfProcess 0x00001000
 
 pcb_t pcb[numberOfProcesses]; int processes = 0; int executing = 1;
@@ -43,7 +43,8 @@ void initialiseProcess(ctx_t* ctx, int i) {
   pcb[ i ].status   = STATUS_READY;
   pcb[ i ].ctx.cpsr = 0x50;
   pcb[ i ].ctx.pc   = ( uint32_t )( userPrograms[ i-1 ] );
-  pcb[ i ].ctx.sp = ( uint32_t )( assignToStack (i-1) );
+  pcb[ i ].ctx.sp   = ( uint32_t )( assignToStack (i-1) );
+  pcb[ i ].pr       = i+2;
 }
 
 void executeNext (ctx_t* ctx, uint32_t next){
@@ -65,9 +66,51 @@ void roundRobinScheduler (ctx_t* ctx) {
 
 }
 
+void decrementPriority() {
+  for (int i=1; i<processesForRobin; i++){
+    if (pcb[ i ].status == STATUS_EXECUTING) {
+      pcb[ i ].pr -= 1;
+    }
+  }
+}
+
+void incrementPriority() {
+  for (int i=1; i<processesForRobin; i++){
+    if (pcb[ i ].status != STATUS_EXECUTING) {
+      pcb[ i ].pr += 1;
+    }
+  }
+}
+
+int highestPriority(ctx_t* ctx){
+  int highest = 0;
+  int processId = 0;
+
+  /*Loop through all the processes in the process table to find the
+  one with maximum priority*/
+  for (int i=1; i<processesForRobin; i++){
+    if (pcb[i].pr > highest){
+      highest = pcb[i].pr;
+      processId = i;
+    }
+  }
+
+  /*Decrement the priority of the current process as it ages
+  while the other processes are waiting in the queue.*/
+  decrementPriority();
+  /*Increment the priorities of the processes in the ready queue
+  while the current process is executing.*/
+  incrementPriority();
+
+  return processId;
+}
+
 void priorityScheduler (ctx_t* ctx) {
 
-  int nextProcess = (executing+1)%processesForRobin;
+  //Find the process with highest priority.
+  int highest = highestPriority(ctx);
+  //Execute it.
+  executeNext(ctx, highest);
 
 }
 
@@ -123,7 +166,8 @@ void hilevel_handler_irq(ctx_t* ctx) {
 
 
   if( id == GIC_SOURCE_TIMER0 ) {
-    roundRobinScheduler(ctx);
+    //roundRobinScheduler(ctx);
+    priorityScheduler(ctx);
     TIMER0->Timer1IntClr = 0x01;
   }
 
@@ -143,7 +187,8 @@ void hilevel_handler_svc(ctx_t* ctx, uint32_t id) {
 
   switch( id ) {
     case 0x00 : { // 0x00 => yield()
-      roundRobinScheduler(ctx);
+      //roundRobinScheduler(ctx);
+      priorityScheduler(ctx);
       break;
     }
 

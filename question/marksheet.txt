@@ -43,7 +43,7 @@ generality, realism, or style of a solution.
 
     Stage 1 : a baseline kernel
 [X]           - pre-emptive multi-tasking                            ( 30%)
-[?]           - priority-based scheduler                             ( 10%)
+[X]           - priority-based scheduler                             ( 10%)
 
     Stage 2 : closed generalisations and enhancements
 [?]           - fork, exec and exit system calls                     ( 15%)
