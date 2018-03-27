@@ -9,10 +9,10 @@
 #include "hilevel.h"
 
 #define numberOfProcesses 1000
-#define processesForRobin 6
+#define processesForRobin 4
 #define sizeOfProcess 0x00001000
-
-pcb_t pcb[numberOfProcesses]; int processes = 0; int executing = 1;
+#define sizeOfStack   0x01000000
+pcb_t pcb[numberOfProcesses]; int processes = 0; int executing = 0;
 
 //Declare the user programs and stack pointer
 extern void     main_P3();
@@ -22,15 +22,18 @@ extern void     main_P6();
 extern void     main_P7();
 extern uint32_t tos_p;
 
+extern void     main_console();
+extern uint32_t tos_console;
+
 //Keep track of the current stack pointer for the processes
 uint32_t currentTos = (uint32_t) &tos_p;
-//Keep track of the three top of stack stack pointers for the three programs
-uint32_t tosPointers [ processesForRobin ];
+//Keep track of the three top of stack stack pointers for the programs
+uint32_t tosPointers [ numberOfProcesses ];
 //Initialise the three user programs
-uint32_t userPrograms [ processesForRobin ] = {(uint32_t) (&main_P3), (uint32_t) (&main_P4),
+uint32_t userPrograms [ processesForRobin-1 ] = {(uint32_t) (&main_P3), (uint32_t) (&main_P4),
   /*(uint32_t) (&main_P6), (uint32_t) (&main_P7),*/ (uint32_t) (&main_P5)};
 
-uint32_t assignToStack(int i) {
+uint32_t allocateStack(int i) {
   uint32_t tos = currentTos;
   currentTos -= sizeOfProcess;
   tosPointers[ i ] = tos;
@@ -43,7 +46,7 @@ void initialiseProcess(ctx_t* ctx, int i) {
   pcb[ i ].status   = STATUS_READY;
   pcb[ i ].ctx.cpsr = 0x50;
   pcb[ i ].ctx.pc   = ( uint32_t )( userPrograms[ i-1 ] );
-  pcb[ i ].ctx.sp   = ( uint32_t )( assignToStack (i-1) );
+  pcb[ i ].ctx.sp   = ( uint32_t )( allocateStack (i) );
   pcb[ i ].pr       = i+2;
 }
 
@@ -67,7 +70,7 @@ void roundRobinScheduler (ctx_t* ctx) {
 }
 
 void decrementPriority() {
-  for (int i=1; i<processesForRobin; i++){
+  for (int i=0; i<processes+1; i++){
     if (pcb[ i ].status == STATUS_EXECUTING) {
       pcb[ i ].pr -= 1;
     }
@@ -75,7 +78,7 @@ void decrementPriority() {
 }
 
 void incrementPriority() {
-  for (int i=1; i<processesForRobin; i++){
+  for (int i=0; i<processes+1; i++){
     if (pcb[ i ].status != STATUS_EXECUTING) {
       pcb[ i ].pr += 1;
     }
@@ -88,8 +91,8 @@ int highestPriority(ctx_t* ctx){
 
   /*Loop through all the processes in the process table to find the
   one with maximum priority*/
-  for (int i=1; i<processesForRobin; i++){
-    if (pcb[i].pr > highest){
+  for (int i=0; i<processes+1; i++){
+    if (pcb[i].pr > highest && pcb[i].status != STATUS_TERMINATED){
       highest = pcb[i].pr;
       processId = i;
     }
@@ -145,17 +148,27 @@ int_enable_irq();
 * - the PC and SP values matche the entry point and top of stack.
 */
 
-  for (int i=1; i < processesForRobin; i++){
-    initialiseProcess(ctx, i);
-  }
+  // for (int i=1; i < processesForRobin; i++){
+  //   initialiseProcess(ctx, i);
+  // }
 
+/* Initialise the console to be the first in the pcb table */
+  memset( &pcb[ 0 ], 0, sizeof( pcb_t ) );
+  pcb[ 0 ].pid      = 0;
+  pcb[ 0 ].status   = STATUS_READY;
+  pcb[ 0 ].ctx.cpsr = 0x50;
+  pcb[ 0 ].ctx.pc   = ( uint32_t )( &main_console );
+  pcb[ 0 ].ctx.sp   = ( uint32_t )( &tos_console );
+  pcb[ 0 ].pr       = 0;
+
+  tosPointers[0] = pcb[ 0 ].ctx.sp;
 
 /* Once the PCBs are initialised, we (arbitrarily) select one to be
 * restored (i.e., executed) when the function then returns.
 */
 
-  memcpy( ctx, &pcb[ 1 ].ctx, sizeof( ctx_t ) );
-  pcb[ 1 ].status = STATUS_EXECUTING;
+  memcpy( ctx, &pcb[ 0 ].ctx, sizeof( ctx_t ) );
+  pcb[ 0 ].status = STATUS_EXECUTING;
 
   return;
 }
@@ -206,7 +219,7 @@ void hilevel_handler_svc(ctx_t* ctx, uint32_t id) {
       break;
     }
 
-    case 0x02 : { // 0x10 => read(fd, x, n)
+    case 0x02 : { // 0x02 => read(fd, x, n)
       int   fd = ( int   )( ctx->gpr[ 0 ] );
       char*  x = ( char* )( ctx->gpr[ 1 ] );
       int    n = ( int   )( ctx->gpr[ 2 ] );
@@ -218,6 +231,48 @@ void hilevel_handler_svc(ctx_t* ctx, uint32_t id) {
       write(1,x,n);
       break;
     }
+
+    case 0x03 : {
+      //Increment the number of processes;
+      processes += 1;
+      //Creates new memory
+      memset(&pcb[processes], 0, sizeof(pcb_t));
+      //Copy context
+      memcpy(&pcb[processes].ctx, ctx, sizeof(ctx_t));
+      //Allocate stack for the new process and make its stack pointer point to the top of the newly allocated stack.
+      pcb[processes].ctx.sp = (uint32_t) allocateStack(processes);
+      //Copy the content that was executed by the parent before forking.
+      memcpy(&pcb[processes].ctx.sp - sizeOfStack, &pcb[0].ctx.sp - sizeOfStack, sizeOfStack);
+      //Update stack pointer of new program so that it starts from where the parent finished.
+      uint32_t offset = (uint32_t) tosPointers[0] - (uint32_t) ctx->sp;
+      pcb[processes].ctx.sp = (uint32_t) tosPointers[processes] - offset;
+
+      //Set the program counter, id and priority of the new process.
+      pcb[processes].ctx.pc = ctx->pc;
+      pcb[processes].pid = processes;
+      pcb[processes].pr = processes + 2;
+
+      //return value of child is 0.
+      pcb[processes].ctx.gpr[0] = 0;
+      //return value of parent is child's pid;
+      ctx->gpr[0] = pcb[processes].pid;
+      break;
+    }
+
+    case 0x04 : { //0x04 => kill(pid, x)
+      pcb[executing].status = STATUS_TERMINATED;
+      break;
+    }
+
+    case 0x05 : {
+      uint32_t execId = (uint32_t) ctx->gpr[0];
+      memset((void*) tosPointers[executing] - sizeOfStack, 0, sizeOfStack);
+      ctx->sp = tosPointers[executing];
+      ctx->pc = (uint32_t) execId;
+      break;
+    }
+
+
 
     default   : { // 0x?? => unknown/unsupported
       break;

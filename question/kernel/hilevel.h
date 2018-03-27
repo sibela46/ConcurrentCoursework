@@ -58,7 +58,6 @@ typedef struct {
   status_t status;
      ctx_t    ctx;
        int     pr;
-  uint32_t    tos;
 } pcb_t;
 
 #endif
