@@ -23,7 +23,7 @@ SECTIONS {
   .       = . + 0x00001000;
   tos_svc = .;
   /* allocate stack for the console  */
-  .       = . + 0x00001000;
+  .       = . + 0x01000000;
   tos_console = .;
   /* allocate stack for all processes*/
   .       = . + 0x01000000;

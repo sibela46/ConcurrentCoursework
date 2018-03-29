@@ -9,7 +9,7 @@
 #include "hilevel.h"
 
 #define numberOfProcesses 1000
-#define processesForRobin 4
+#define processesForRobin 3
 #define sizeOfProcess 0x00001000
 #define sizeOfStack   0x01000000
 pcb_t pcb[numberOfProcesses]; int processes = 0; int executing = 0;
@@ -30,8 +30,8 @@ uint32_t currentTos = (uint32_t) &tos_p;
 //Keep track of the three top of stack stack pointers for the programs
 uint32_t tosPointers [ numberOfProcesses ];
 //Initialise the three user programs
-uint32_t userPrograms [ processesForRobin-1 ] = {(uint32_t) (&main_P3), (uint32_t) (&main_P4),
-  /*(uint32_t) (&main_P6), (uint32_t) (&main_P7),*/ (uint32_t) (&main_P5)};
+uint32_t userPrograms [ processesForRobin ] = {(uint32_t) (&main_P3), (uint32_t) (&main_P4),
+/*(uint32_t) (&main_P6), (uint32_t) (&main_P7), */(uint32_t) (&main_P5)};
 
 uint32_t allocateStack(int i) {
   uint32_t tos = currentTos;
@@ -148,7 +148,7 @@ int_enable_irq();
 * - the PC and SP values matche the entry point and top of stack.
 */
 
-  // for (int i=1; i < processesForRobin; i++){
+  // for (int i=1; i < processes+1; i++){
   //   initialiseProcess(ctx, i);
   // }
 
@@ -180,7 +180,7 @@ void hilevel_handler_irq(ctx_t* ctx) {
 
   if( id == GIC_SOURCE_TIMER0 ) {
     //roundRobinScheduler(ctx);
-    priorityScheduler(ctx);
+     priorityScheduler(ctx);
     TIMER0->Timer1IntClr = 0x01;
   }
 
@@ -235,21 +235,22 @@ void hilevel_handler_svc(ctx_t* ctx, uint32_t id) {
     case 0x03 : {
       //Increment the number of processes;
       processes += 1;
+      PL011_putc(UART0, processes + '0', true);
       //Creates new memory
       memset(&pcb[processes], 0, sizeof(pcb_t));
       //Copy context
       memcpy(&pcb[processes].ctx, ctx, sizeof(ctx_t));
+      pcb[processes].pid = processes;
       //Allocate stack for the new process and make its stack pointer point to the top of the newly allocated stack.
-      pcb[processes].ctx.sp = (uint32_t) allocateStack(processes);
+      tosPointers[processes] = (uint32_t) allocateStack(processes);
       //Copy the content that was executed by the parent before forking.
-      memcpy(&pcb[processes].ctx.sp - sizeOfStack, &pcb[0].ctx.sp - sizeOfStack, sizeOfStack);
+      memcpy((void*)(tosPointers[processes] - (uint32_t) sizeOfStack),(void*)(tosPointers[executing] - (uint32_t) sizeOfStack), sizeOfStack);
       //Update stack pointer of new program so that it starts from where the parent finished.
-      uint32_t offset = (uint32_t) tosPointers[0] - (uint32_t) ctx->sp;
+      uint32_t offset = tosPointers[executing] - ctx->sp;
       pcb[processes].ctx.sp = (uint32_t) tosPointers[processes] - offset;
 
-      //Set the program counter, id and priority of the new process.
+      //Set the program counter and priority of the new process.
       pcb[processes].ctx.pc = ctx->pc;
-      pcb[processes].pid = processes;
       pcb[processes].pr = processes + 2;
 
       //return value of child is 0.
@@ -266,7 +267,7 @@ void hilevel_handler_svc(ctx_t* ctx, uint32_t id) {
 
     case 0x05 : {
       uint32_t execId = (uint32_t) ctx->gpr[0];
-      memset((void*) tosPointers[executing] - sizeOfStack, 0, sizeOfStack);
+      memset((void*) (tosPointers[executing] - sizeOfStack), 0, sizeOfStack);
       ctx->sp = tosPointers[executing];
       ctx->pc = (uint32_t) execId;
       break;
