@@ -5,13 +5,29 @@
  * LICENSE.txt within the associated archive or repository).
  */
 
+ /* Parts to uncomment for the different stages:
+  *
+  * 1. Stage1-a
+  *    a)change processes to 2
+  *    b)remove P5 from the userPrograms table.
+  *    c)uncomment roundRobinScheduler and comment out priorityScheduler
+  * 2. Stage1-b
+  *    a)change processes to 3
+  *    b)add P5 back to the table
+  *    c)uncomment roundRobinScheduler and comment out priorityScheduler
+  * 3. Stage2-a
+  *    a)change processes to 0 as they will be dynamically created.
+  *    b)leave only P3, P4 and P5
+  *    c)uncomment initialisation of processes
+  * They don't *precisely* match the standard C library, but are intended
+  * to act as a limited model of similar concepts.
+  */
 #include "libc.h"
 #include "hilevel.h"
 
 #define numberOfProcesses 1000
-#define processesForRobin 3
 #define sizeOfProcess 0x00001000
-#define sizeOfStack   0x01000000
+#define sizeOfStack 0x00001000+ 16*0x00001000
 pcb_t pcb[numberOfProcesses]; int processes = 0; int executing = 0;
 
 //Declare the user programs and stack pointer
@@ -30,12 +46,12 @@ uint32_t currentTos = (uint32_t) &tos_p;
 //Keep track of the three top of stack stack pointers for the programs
 uint32_t tosPointers [ numberOfProcesses ];
 //Initialise the three user programs
-uint32_t userPrograms [ processesForRobin ] = {(uint32_t) (&main_P3), (uint32_t) (&main_P4),
-/*(uint32_t) (&main_P6), (uint32_t) (&main_P7), */(uint32_t) (&main_P5)};
+uint32_t userPrograms [ numberOfProcesses ] = {(uint32_t) (&main_P3), (uint32_t) (&main_P4)
+/*(uint32_t) (&main_P6), (uint32_t) (&main_P7), (uint32_t) (&main_P5)*/};
 
 uint32_t allocateStack(int i) {
   uint32_t tos = currentTos;
-  currentTos -= sizeOfProcess;
+  currentTos += sizeOfProcess;
   tosPointers[ i ] = tos;
   return tos;
 }
@@ -60,7 +76,7 @@ void executeNext (ctx_t* ctx, uint32_t next){
 
 void roundRobinScheduler (ctx_t* ctx) {
 
-  int nextProcess = (executing+1)%processesForRobin;
+  int nextProcess = (executing+1)%(processes+1);
 
   if (nextProcess == 0){
     nextProcess += 1; //because console is always 0.
@@ -72,7 +88,14 @@ void roundRobinScheduler (ctx_t* ctx) {
 void decrementPriority() {
   for (int i=0; i<processes+1; i++){
     if (pcb[ i ].status == STATUS_EXECUTING) {
-      pcb[ i ].pr -= 1;
+      switch (i) {
+        case 0:
+          pcb[ i ].pr -= 2;
+          break;
+        default:
+          pcb[ i ].pr -= 1;
+          break;
+      }
     }
   }
 }
@@ -161,7 +184,7 @@ int_enable_irq();
   pcb[ 0 ].ctx.sp   = ( uint32_t )( &tos_console );
   pcb[ 0 ].pr       = 0;
 
-  tosPointers[0] = pcb[ 0 ].ctx.sp;
+  tosPointers[0] = (uint32_t)&tos_console;
 
 /* Once the PCBs are initialised, we (arbitrarily) select one to be
 * restored (i.e., executed) when the function then returns.
@@ -179,8 +202,8 @@ void hilevel_handler_irq(ctx_t* ctx) {
 
 
   if( id == GIC_SOURCE_TIMER0 ) {
-    //roundRobinScheduler(ctx);
-     priorityScheduler(ctx);
+    // roundRobinScheduler(ctx);
+    priorityScheduler(ctx);
     TIMER0->Timer1IntClr = 0x01;
   }
 
@@ -200,7 +223,7 @@ void hilevel_handler_svc(ctx_t* ctx, uint32_t id) {
 
   switch( id ) {
     case 0x00 : { // 0x00 => yield()
-      //roundRobinScheduler(ctx);
+      // roundRobinScheduler(ctx);
       priorityScheduler(ctx);
       break;
     }
@@ -235,7 +258,6 @@ void hilevel_handler_svc(ctx_t* ctx, uint32_t id) {
     case 0x03 : {
       //Increment the number of processes;
       processes += 1;
-      PL011_putc(UART0, processes + '0', true);
       //Creates new memory
       memset(&pcb[processes], 0, sizeof(pcb_t));
       //Copy context
@@ -260,11 +282,6 @@ void hilevel_handler_svc(ctx_t* ctx, uint32_t id) {
       break;
     }
 
-    case 0x04 : { //0x04 => kill(pid, x)
-      pcb[executing].status = STATUS_TERMINATED;
-      break;
-    }
-
     case 0x05 : {
       uint32_t execId = (uint32_t) ctx->gpr[0];
       memset((void*) (tosPointers[executing] - sizeOfStack), 0, sizeOfStack);
@@ -273,7 +290,11 @@ void hilevel_handler_svc(ctx_t* ctx, uint32_t id) {
       break;
     }
 
-
+    case 0x06 : { //0x04 => kill(pid, x)
+      int currentID = ctx->gpr[0];
+      pcb[currentID].status = STATUS_TERMINATED;
+      break;
+    }
 
     default   : { // 0x?? => unknown/unsupported
       break;
