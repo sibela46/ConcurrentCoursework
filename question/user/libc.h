@@ -1,7 +1,7 @@
 /* Copyright (C) 2017 Daniel Page <csdsp@bristol.ac.uk>
  *
- * Use of this source code is restricted per the CC BY-NC-ND license, a copy of 
- * which can be found via http://creativecommons.org (and should be included as 
+ * Use of this source code is restricted per the CC BY-NC-ND license, a copy of
+ * which can be found via http://creativecommons.org (and should be included as
  * LICENSE.txt within the associated archive or repository).
  */
 
@@ -20,7 +20,7 @@ typedef int pid_t;
  *
  * 1. system call identifiers (i.e., the constant used by a system call
  *    to specify which action the kernel should take),
- * 2. signal identifiers (as used by the kill system call), 
+ * 2. signal identifiers (as used by the kill system call),
  * 3. status codes for exit,
  * 4. standard file descriptors (e.g., for read and write system calls),
  * 5. platform-specific constants, which may need calibration (wrt. the
@@ -38,6 +38,12 @@ typedef int pid_t;
 #define SYS_EXEC      ( 0x05 )
 #define SYS_KILL      ( 0x06 )
 #define SYS_NICE      ( 0x07 )
+#define SYS_CHWRITE   ( 0x08 )
+#define SYS_CHREAD    ( 0x09 )
+#define SYS_PIPE      ( 0x10 )
+#define SYS_OPEN      ( 0x11 )
+#define SYS_CLOSE     ( 0x12 )
+#define SYS_ID        ( 0x13 )
 
 #define SIG_TERM      ( 0x00 )
 #define SIG_QUIT      ( 0x01 )
@@ -68,7 +74,18 @@ extern int  fork();
 extern void exit(       int   x );
 // perform exec, i.e., start executing program at address x
 extern void exec( const void* x );
-
+// perform chanWrite, i.e. write to channel fd
+extern int chanWrite( int fd, int x, int block, int phid );
+// perform chanRead, i.e. read from channel fd
+extern int chanRead( int fd, int block, int id );
+// perform mkfifo, i.e. create a new pipe
+extern int pipe( int fd, int block, int pid_a, int pid_b );
+// perform open, i.e. open a new pipe
+extern int open( int fd, int id);
+// perform close, i.e. stop using a pipe
+extern void close( int fd, int id );
+// return the id of the process that calls it
+extern int id();
 // for process identified by pid, send signal of x
 extern int  kill( pid_t pid, int x );
 // for process identified by pid, set  priority to x

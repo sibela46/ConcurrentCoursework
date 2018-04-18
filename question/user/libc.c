@@ -1,7 +1,7 @@
 /* Copyright (C) 2017 Daniel Page <csdsp@bristol.ac.uk>
  *
- * Use of this source code is restricted per the CC BY-NC-ND license, a copy of 
- * which can be found via http://creativecommons.org (and should be included as 
+ * Use of this source code is restricted per the CC BY-NC-ND license, a copy of
+ * which can be found via http://creativecommons.org (and should be included as
  * LICENSE.txt within the associated archive or repository).
  */
 
@@ -69,7 +69,7 @@ int write( int fd, const void* x, size_t n ) {
                 "mov r2, %4 \n" // assign r2 =  n
                 "svc %1     \n" // make system call SYS_WRITE
                 "mov %0, r0 \n" // assign r  = r0
-              : "=r" (r) 
+              : "=r" (r)
               : "I" (SYS_WRITE), "r" (fd), "r" (x), "r" (n)
               : "r0", "r1", "r2" );
 
@@ -84,8 +84,8 @@ int  read( int fd,       void* x, size_t n ) {
                 "mov r2, %4 \n" // assign r2 =  n
                 "svc %1     \n" // make system call SYS_READ
                 "mov %0, r0 \n" // assign r  = r0
-              : "=r" (r) 
-              : "I" (SYS_READ),  "r" (fd), "r" (x), "r" (n) 
+              : "=r" (r)
+              : "I" (SYS_READ),  "r" (fd), "r" (x), "r" (n)
               : "r0", "r1", "r2" );
 
   return r;
@@ -95,8 +95,8 @@ int  fork() {
   int r;
 
   asm volatile( "svc %1     \n" // make system call SYS_FORK
-                "mov %0, r0 \n" // assign r  = r0 
-              : "=r" (r) 
+                "mov %0, r0 \n" // assign r  = r0
+              : "=r" (r)
               : "I" (SYS_FORK)
               : "r0" );
 
@@ -130,7 +130,7 @@ int  kill( int pid, int x ) {
                 "mov r1, %3 \n" // assign r1 =    x
                 "svc %1     \n" // make system call SYS_KILL
                 "mov %0, r0 \n" // assign r0 =    r
-              : "=r" (r) 
+              : "=r" (r)
               : "I" (SYS_KILL), "r" (pid), "r" (x)
               : "r0", "r1" );
 
@@ -141,9 +141,94 @@ void nice( int pid, int x ) {
   asm volatile( "mov r0, %1 \n" // assign r0 =  pid
                 "mov r1, %2 \n" // assign r1 =    x
                 "svc %0     \n" // make system call SYS_NICE
-              : 
+              :
               : "I" (SYS_NICE), "r" (pid), "r" (x)
               : "r0", "r1" );
 
   return;
+}
+
+int chanWrite(int fd, int x, int block, int phid ){
+  int r;
+
+      asm volatile( "mov r0, %2 \n" // assign r0 = fd
+                "mov r1, %3 \n" // assign r1 =  x
+                "mov r2, %4 \n" // assign r2 = block
+                "mov r3, %5 \n" // assign r3 = phid
+                "svc %1     \n" // make system call SYS_CHWRITE
+                "mov %0, r0 \n" // assign r  = r0
+              : "=r" (r)
+              : "I" (SYS_CHWRITE), "r" (fd), "r" (x), "r" (block), "r" (phid)
+              : "r0", "r1" );
+
+  return r;
+}
+
+int chanRead( int fd, int block, int id ){
+  int r;
+
+  asm volatile( "mov r0, %2 \n" // assign r0 = fd
+                "mov r1, %3 \n" // assign r1 = block
+                "mov r2, %4 \n" // assign r2 = id
+                "svc %1     \n" // make system call SYS_CHREAD
+                "mov %0, r0 \n" // assign r  = r1
+              : "=r" (r)
+              : "I" (SYS_CHREAD),  "r" (fd), "r" (block), "r" (id)
+              : "r0", "r1", "r2" );
+
+  return r;
+}
+
+int pipe( int fd, int block, int pid_a, int pid_b ) {
+  int r;
+
+  asm volatile( "mov r0, %2 \n" // assign r0 = fd
+                "mov r1, %3 \n" // assign r1 = block
+                "mov r2, %4 \n" // assign r1 = block
+                "mov r3, %5 \n" // assign r1 = block
+                "svc %1     \n" // make system call SYS_PIPE
+                "mov %0, r0 \n" // assign r  = r0
+               : "=r" (r)
+               : "I" (SYS_PIPE), "r" (fd), "r" (block), "r" (pid_a), "r" (pid_b)
+               : "r0", "r1", "r2", "r3" );
+
+  return r;
+
+}
+
+int open( int fd, int id ) {
+  int r;
+
+  asm volatile( "mov r0, %2 \n" // assign r0 = fd
+                "mov r1, %3 \n" // assign r1 = id
+                "svc %1     \n" // make system call SYS_OPEN
+                "mov %0, r0 \n" // assign r  = r0
+                : "=r" (r)
+                : "I" (SYS_OPEN), "r" (fd), "r" (id)
+                : "r0", "r1");
+
+  return r;
+}
+
+void close( int fd, int id ) {
+
+  asm volatile( "mov r0, %1 \n" // assign r0 = fd
+                "mov r1, %2 \n" // assign r1 = id
+                "svc %0     \n" // make system call SYS_CLOSE
+                :
+                : "I" (SYS_CLOSE), "r" (fd), "r" (id)
+                : "r0", "r1");
+
+}
+
+int id() {
+    int r;
+
+    asm volatile( "svc %1    \n" // make system call SYS_ID)
+                  "mov %0, r0 \n"
+                  : "=r" (r)
+                  : "I" (SYS_ID)
+                  : "r0");
+
+    return r;
 }

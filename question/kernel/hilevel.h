@@ -58,6 +58,16 @@ typedef struct {
   status_t status;
      ctx_t    ctx;
        int     pr;
+  uint32_t    tos;
 } pcb_t;
+
+typedef struct {
+    pid_t       pid_a;
+    pid_t       pid_b;
+    pid_t        last;
+      int   channelID;
+      int        flag;
+      int     storage;
+} channel;
 
 #endif
