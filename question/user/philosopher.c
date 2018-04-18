@@ -4,6 +4,7 @@
 
 extern void put_i();
 int statePH = 0;
+
 void philosopher_thinking(int me) {
     write(STDOUT_FILENO, "Philosopher ", 12);
     put_i(UART0, me);

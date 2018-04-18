@@ -29,7 +29,7 @@
 #include "libc.h"
 #include "hilevel.h"
 
-#define numberOfPhilosophers 3
+#define numberOfPhilosophers 16
 #define numberOfProcesses 1000
 #define sizeOfProcess 0x00001000
 pcb_t pcb[numberOfProcesses]; channel channels[numberOfPhilosophers]; int processes = 0; int executing = 0;

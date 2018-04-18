@@ -2,7 +2,7 @@
 #include "libc.h"
 #include "hilevel.h"
 
-#define numberOfPhilosophers 3
+#define numberOfPhilosophers 16
 phl_t  phl[numberOfPhilosophers];
 int    forks[numberOfPhilosophers];
 
@@ -17,6 +17,7 @@ void philosopher_eaten(int current) {
     write(STDOUT_FILENO, " has eaten", 10);
     PL011_putc(UART0, '\n', true);
 }
+
 void main_manager() {
 
     //INITIALISE PIPES.
