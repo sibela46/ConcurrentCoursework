@@ -29,7 +29,7 @@
 #include "libc.h"
 #include "hilevel.h"
 
-#define numberOfPhilosophers 3
+#define numberOfPhilosophers 16
 #define numberOfProcesses 1000
 #define sizeOfProcess 0x00001000
 pcb_t pcb[numberOfProcesses]; channel channels[numberOfPhilosophers]; int processes = 0; int executing = 0;
@@ -95,7 +95,7 @@ void roundRobinScheduler (ctx_t* ctx) {
 
 void decrementPriority() {
   for (int i=0; i<processes+1; i++){
-    if (pcb[ i ].status == STATUS_EXECUTING) {
+    if (i == executing) {
       pcb[ i ].pr -= 1;
     }
   }
@@ -103,7 +103,7 @@ void decrementPriority() {
 
 void incrementPriority() {
   for (int i=0; i<processes+1; i++){
-    if (pcb[ i ].status != STATUS_EXECUTING) {
+    if (i != executing) {
       pcb[ i ].pr += 1;
     }
   }
@@ -288,16 +288,16 @@ void hilevel_handler_svc(ctx_t* ctx, uint32_t id) {
       //Update stack pointer of new program so that it starts from where the parent finished.
       uint32_t offset = (uint32_t) tosPointers[executing] - ctx->sp;
       //Copy the content that was executed by the parent before forking.
-      memcpy((void*)(tosPointers[processes] - (uint32_t) sizeOfProcess),(void*)(tosPointers[executing] - (uint32_t) sizeOfProcess), sizeOfProcess);
+      memcpy((void*)(tosPointers[processes] -  offset),(void*)(tosPointers[executing] - offset), offset);
       pcb[processes].ctx.sp = (uint32_t) tosPointers[processes] - offset;
 
       //Set the priority of the new process.
-      pcb[processes].pr = processes + 2;
+      pcb[processes].pr = (processes + 2);
 
       //return value of child is 0.
       pcb[processes].ctx.gpr[0] = 0;
       //return value of parent is child's pid;
-      ctx->gpr[0] = pcb[processes].pid;
+      ctx->gpr[0] = processes;
 
       break;
     }
@@ -309,8 +309,7 @@ void hilevel_handler_svc(ctx_t* ctx, uint32_t id) {
     }
 
     case 0x05 : {
-      uint32_t execId = (uint32_t) ctx->gpr[0];
-      memset((void*) (tosPointers[executing] - sizeOfProcess), 0, sizeOfProcess);
+      void* execId = (void*) ctx->gpr[0];
       ctx->sp = tosPointers[executing];
       ctx->pc = (uint32_t) execId;
       break;
@@ -325,18 +324,16 @@ void hilevel_handler_svc(ctx_t* ctx, uint32_t id) {
     case 0x08 : { //0x08 => chwrite(fd, x, block, id)
       int   fd  = ( int   )( ctx->gpr[ 0 ] );
       int    x  = ( int   )( ctx->gpr[ 1 ] );
-      int block = ( int   )( ctx->gpr[ 2 ] );
-      int   id  = ( int   )( ctx->gpr[ 3 ] );
+      int   id  = ( int   )( ctx->gpr[ 2 ] );
 
-      if (block == 1 || channels[fd].flag == 1 || channels[fd].last == id) {
+      if (channels[fd].lastWrote == id) {
 //           write(STDOUT_FILENO, "Cannot write\n", 13);
-          channels[fd].flag = 0;
-          break;
+          ctx->gpr[0] = -1;
       }
       else  {
-          channels[fd].last    = id;
-          channels[fd].storage = x;
-          channels[fd].flag    = block;
+          channels[fd].lastWrote = id;
+          channels[fd].storage   =  x;
+          ctx->gpr[0]            =  0;
       }
 
       break;
@@ -344,21 +341,16 @@ void hilevel_handler_svc(ctx_t* ctx, uint32_t id) {
 
     case 0x09 : { //0x09 => chread(fd, block)
       int   fd  = ( int   )( ctx->gpr[ 0 ] );
-      int block = ( int   )( ctx->gpr[ 1 ] );
-      int   id  = ( int   )( ctx->gpr[ 2 ] );
-      int    x;
+      int   id  = ( int   )( ctx->gpr[ 1 ] );
+      int x = 0;
 
-      if (block == 1 || channels[fd].flag == 1 || id == channels[fd].last) {
-         // put_s(UART0, "Waiting for permission to eat.", 30);
+      if (channels[fd].lastWrote == id) {
+//           write(STDOUT_FILENO, "Cannot read\n", 12);
           x = 0;
-          channels[fd].flag = 0;
-          break;
       }
       else {
-          channels[fd].last = id;
           x = channels[fd].storage;
-          channels[fd].storage;
-          channels[fd].flag    = block;
+          channels[fd].storage = 0;
       }
 
       ctx->gpr[0] = x;
@@ -373,10 +365,11 @@ void hilevel_handler_svc(ctx_t* ctx, uint32_t id) {
 
       channels[fd].pid_a     = pid_a;
       channels[fd].pid_b     = pid_b;
-      channels[fd].storage   = 100;
+      channels[fd].storage   = 0;
       channels[fd].channelID = fd+1;
-      channels[fd].flag      = block;
+      channels[fd].lastWrote = -1;
 
+      ctx->gpr[0] = fd;
       break;
     }
 

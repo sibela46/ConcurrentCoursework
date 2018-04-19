@@ -148,33 +148,31 @@ void nice( int pid, int x ) {
   return;
 }
 
-int chanWrite(int fd, int x, int block, int phid ){
+int chanWrite(int fd, int x, int phid ){
   int r;
 
-      asm volatile( "mov r0, %2 \n" // assign r0 = fd
+  asm volatile( "mov r0, %2 \n" // assign r0 = fd
                 "mov r1, %3 \n" // assign r1 =  x
-                "mov r2, %4 \n" // assign r2 = block
-                "mov r3, %5 \n" // assign r3 = phid
+                "mov r2, %4 \n" // assign r2 = phid
                 "svc %1     \n" // make system call SYS_CHWRITE
                 "mov %0, r0 \n" // assign r  = r0
               : "=r" (r)
-              : "I" (SYS_CHWRITE), "r" (fd), "r" (x), "r" (block), "r" (phid)
-              : "r0", "r1" );
+              : "I" (SYS_CHWRITE), "r" (fd), "r" (x), "r" (phid)
+              : "r0", "r1", "r2" );
 
   return r;
 }
 
-int chanRead( int fd, int block, int id ){
+int chanRead( int fd, int id ){
   int r;
 
   asm volatile( "mov r0, %2 \n" // assign r0 = fd
-                "mov r1, %3 \n" // assign r1 = block
-                "mov r2, %4 \n" // assign r2 = id
+                "mov r1, %3 \n" // assign r2 = id
                 "svc %1     \n" // make system call SYS_CHREAD
-                "mov %0, r0 \n" // assign r  = r1
+                "mov %0, r0 \n" // assign r  = r0
               : "=r" (r)
-              : "I" (SYS_CHREAD),  "r" (fd), "r" (block), "r" (id)
-              : "r0", "r1", "r2" );
+              : "I" (SYS_CHREAD), "r" (fd), "r" (id)
+              : "r0", "r1");
 
   return r;
 }

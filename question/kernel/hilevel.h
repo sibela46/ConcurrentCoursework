@@ -64,9 +64,8 @@ typedef struct {
 typedef struct {
     pid_t       pid_a;
     pid_t       pid_b;
-    pid_t        last;
       int   channelID;
-      int        flag;
+      int   lastWrote;
       int     storage;
 } channel;
 
