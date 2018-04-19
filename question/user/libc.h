@@ -75,9 +75,9 @@ extern void exit(       int   x );
 // perform exec, i.e., start executing program at address x
 extern void exec( const void* x );
 // perform chanWrite, i.e. write to channel fd
-extern int chanWrite( int fd, int x, int block, int phid );
+extern int chanWrite( int fd, int x, int phid );
 // perform chanRead, i.e. read from channel fd
-extern int chanRead( int fd, int block, int id );
+extern int chanRead( int fd, int id );
 // perform mkfifo, i.e. create a new pipe
 extern int pipe( int fd, int block, int pid_a, int pid_b );
 // perform open, i.e. open a new pipe

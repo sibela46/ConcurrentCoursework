@@ -6,11 +6,24 @@
  */
 
 #include "P7.h"
+#include "hilevel.h"
+#include "libc.h"
 
 void main_P7() {
-  while( 1 ) {
-    write( STDOUT_FILENO, "P7", 2 );;
-  }
+    int channelID = 1;
+    int selfID    = 7;
+    int block     = 0;
+    int me = id();
+
+    while (1) {
+        chanWrite(0, 5, me);
+        int x = chanRead(0, me);
+//         if (x != 0) {
+//             PL011_putc(UART0, x+ '0', true);
+//         }
+    }
+
+
 
   exit( EXIT_SUCCESS );
 }
